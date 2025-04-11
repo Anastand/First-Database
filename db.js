@@ -8,7 +8,7 @@ const objectId = mongoose.Types.ObjectId;
 // Creating a schema for the "Users" collection with fields: name, email, and password
 const Users = new Schema({
   name: String, // User's name
-  email: String, // User's email address
+  email: {type:String, unique:true}, // User's email address
   password: String, // User's password
 });
 

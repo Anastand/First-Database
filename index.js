@@ -1,10 +1,11 @@
-// Import required modules: Express for the server, Mongoose for MongoDB, and JWT for authentication
+// Import modules: Express for server, Mongoose for MongoDB, JWT for auth, bcrypt for password hashing
 const express = require("express");
 const app = express();
+const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 
-// Secret key for JWT signing (should be kept secure in a real app)
+// Secret key for JWT signing (keep this safe in a real app)
 const JWT_SECRET = "aryan123";
 
 // Connect to MongoDB Atlas database
@@ -16,38 +17,43 @@ const { usersmodel, todosmodel } = require("./db");
 // Middleware to parse JSON request bodies
 app.use(express.json());
 
-// Signup route: Creates a new user in the database
+// Signup route: Creates a new user with hashed password
 app.post("/signup", async function (req, res) {
   const name = req.body.name;       // Get name from request body
   const email = req.body.email;     // Get email from request body
   const password = req.body.password; // Get password from request body
-  await usersmodel.create({         // Save new user to database
+  const hashedpass = await bcrypt.hash(password, 5); // Hash password with bcrypt (5 salt rounds)
+  console.log(hashedpass);          // Log hashed password for debugging
+  await usersmodel.create({         // Save user with hashed password to database
     name: name,
     email: email,
-    password: password
+    password: hashedpass
   });
   res.json({                        // Send success response
     msg: "you are signed up"
   });
 });
 
-// Signin route: Authenticates user and returns a JWT token
+// Signin route: Verifies user credentials and returns JWT token
 app.post("/signin", async (req, res) => {
   const email = req.body.email;     // Get email from request body
   const password = req.body.password; // Get password from request body
-  const users = await usersmodel.findOne({ // Find user in database
+  const users = await usersmodel.findOne({ // Find user by email
     email: email,
-    password: password,
   });
-  console.log(users);               // Log user data for debugging
-  if (users) {                      // If user exists
+  if (!users) {                     // If email not found
+    res.status(403).json({ msg: "you this is not a registered email addr" }); // Send error
+    return;                         // Stop execution
+  }
+  const passmatch = await bcrypt.compare(password, users.password); // Compare input password with hashed password
+  if (passmatch) {                  // If password matches
     const userToken = jwt.sign({    // Create JWT with user ID
       id: users._id.toString()
     }, JWT_SECRET);
     res.json({                      // Send token in response
       msg: userToken
     });
-  } else {                          // If user not found
+  } else {                          // If password doesn’t match
     res.status(403).json({         // Send error response
       msg: "incorrect credentials"
     });
@@ -57,14 +63,14 @@ app.post("/signin", async (req, res) => {
 // Middleware: Verifies JWT token from request header
 function auth(req, res, next) {
   const token = req.headers.token;  // Get token from headers
-  const decodeddata = jwt.verify(token, JWT_SECRET); // Verify token
+  const decodeddata = jwt.verify(token, JWT_SECRET); // Verify token with secret key
   if (decodeddata) {                // If token is valid
     req.userid = decodeddata.id;    // Attach user ID to request
-    next();                         // Proceed to next function
+    next();                         // Move to next function
   } else {                          // If token is invalid
     res.status(403).json("incorrect credentials"); // Send error (should be JSON object ideally)
   }
-}
+});
 
 // Todo creation route: Adds a new todo for authenticated user
 app.post("/todo", auth, async (req, res) => {
@@ -92,3 +98,7 @@ app.get("/todos", auth, async (req, res) => {
 
 // Start server on port 3000
 app.listen(3000);
+
+// Learning notes:
+// Day 1: Learned basic MongoDB operations (connecting, creating, finding)
+// Day 2: Learned password hashing with bcrypt (and mentioned Zod, likely for validation, not used here yet)
